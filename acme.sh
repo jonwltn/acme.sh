@@ -2834,11 +2834,31 @@ __initHome() {
     _debug "Using default home: $DEFAULT_INSTALL_HOME"
     LE_WORKING_DIR="$DEFAULT_INSTALL_HOME"
   fi
+  # Convert a relative --home to an absolute path: later code cd's around
+  # (e.g. installOnline extracts and enters the archive dir), where a
+  # relative path would point into the wrong directory.
+  # https://github.com/acmesh-official/acme.sh/issues/6477
+  case "$LE_WORKING_DIR" in
+  /*) ;;
+  *)
+    if [ -d "$LE_WORKING_DIR" ]; then
+      LE_WORKING_DIR="$(cd "$LE_WORKING_DIR" && pwd)"
+    fi
+    ;;
+  esac
   export LE_WORKING_DIR
 
   if [ -z "$LE_CONFIG_HOME" ]; then
     LE_CONFIG_HOME="$LE_WORKING_DIR"
   fi
+  case "$LE_CONFIG_HOME" in
+  /*) ;;
+  *)
+    if [ -d "$LE_CONFIG_HOME" ]; then
+      LE_CONFIG_HOME="$(cd "$LE_CONFIG_HOME" && pwd)"
+    fi
+    ;;
+  esac
   _debug "Using config home: $LE_CONFIG_HOME"
   export LE_CONFIG_HOME
 
@@ -7676,7 +7696,9 @@ installOnline() {
 
     cd "$PROJECT_NAME-$_branch"
     chmod +x $PROJECT_ENTRY
-    if ./$PROJECT_ENTRY --install "$@"; then
+    ./$PROJECT_ENTRY --install "$@"
+    _install_rc="$?"
+    if [ "$_install_rc" = "0" ]; then
       _info "Install success!"
     fi
 
@@ -7684,6 +7706,9 @@ installOnline() {
 
     rm -rf "$PROJECT_NAME-$_branch"
     rm -f "$localname"
+    # Propagate the install result so a failed upgrade is not reported as
+    # success. https://github.com/acmesh-official/acme.sh/issues/6477
+    exit "$_install_rc"
   )
 }
 
