@@ -5838,6 +5838,14 @@ renew() {
   fi
   _info "Renewing using Le_API=$Le_API"
 
+  # Honor --local-address given on the renew/renewAll command line: it overrides
+  # the value saved at issue time (and gets re-saved by issue() below), so certs
+  # issued before the machine gained multiple addresses can still be renewed.
+  # https://github.com/acmesh-official/acme.sh/issues/7009
+  if [ "$_local_address" ]; then
+    Le_LocalAddress="$_local_address"
+  fi
+
   _clearAPI
   _clearCA
   export ACME_DIRECTORY="$Le_API"
