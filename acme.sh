@@ -5752,14 +5752,18 @@ $_authorizations_map"
   fi
 
   # Warn when the scheduled renewal falls after the cert has already expired,
-  # e.g. a 1-day cert from an internal CA combined with the default 60-day
+  # e.g. a 1-day cert from an internal CA combined with the default 30-day
   # schedule, which computes from the creation date and never looks at
-  # notAfter. https://github.com/acmesh-official/acme.sh/issues/6917
-  _renew_chk_enddate="$(_enddate "$CERT_PATH")"
-  _renew_chk_endtime="$(_ssldate2time "$_renew_chk_enddate")"
-  if [ "$Le_NextRenewTime" ] && [ "$_renew_chk_endtime" ] && [ "$Le_NextRenewTime" -ge "$_renew_chk_endtime" ]; then
-    _info "$(__red "WARNING: the cert expires at $_renew_chk_enddate, BEFORE the next scheduled renewal time $Le_NextRenewTimeStr.")"
-    _info "$(__red "The cert will already be expired when the renewal runs. If your CA issues short-lived certs, use a negative --days value (e.g. --days -1) to renew relative to the expiry time.")"
+  # notAfter. Skip the warning for a fixed-date --valid-to: there
+  # Le_NextRenewTime equals the expiry by design and the non-renewable state
+  # was already reported above. https://github.com/acmesh-official/acme.sh/issues/6917
+  if [ -z "$_valid_to" ] || _startswith "$_valid_to" "+"; then
+    _renew_chk_enddate="$(_enddate "$CERT_PATH")"
+    _renew_chk_endtime="$(_ssldate2time "$_renew_chk_enddate")"
+    if [ "$Le_NextRenewTime" ] && [ "$_renew_chk_endtime" ] && [ "$Le_NextRenewTime" -ge "$_renew_chk_endtime" ]; then
+      _info "$(__red "WARNING: the cert expires at $_renew_chk_enddate, BEFORE the next scheduled renewal time $Le_NextRenewTimeStr.")"
+      _info "$(__red "The cert will already be expired when the renewal runs. If your CA issues short-lived certs, use a negative --days value (e.g. --days -1) to renew relative to the expiry time.")"
+    fi
   fi
 
   _savedomainconf "Le_NextRenewTimeStr" "$Le_NextRenewTimeStr"
@@ -8567,6 +8571,15 @@ _process() {
   fi
 
   _debug2 LE_WORKING_DIR "$LE_WORKING_DIR"
+
+  # --days and --valid-to are mutually exclusive by design: --valid-to pins
+  # the cert lifetime and the renewal time follows the expiry, so a
+  # creation-based --days schedule can not apply.
+  if [ "$_days" ] && [ "$_valid_to" ]; then
+    _err "--days can not be used together with --valid-to."
+    _err "With --valid-to, the renewal time is derived from the expiry time automatically."
+    return 1
+  fi
 
   if [ "$DEBUG" ]; then
     version
