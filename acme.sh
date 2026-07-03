@@ -3888,7 +3888,7 @@ _regAccount() {
 
   mkdir -p "$CA_DIR"
 
-  if [ ! -f "$ACCOUNT_KEY_PATH" ]; then
+  if [ ! -s "$ACCOUNT_KEY_PATH" ]; then
     if ! _create_account_key "$_reg_length"; then
       _err "Error creating account key."
       return 1
