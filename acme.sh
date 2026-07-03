@@ -2842,6 +2842,17 @@ __initHome() {
   _debug "Using config home: $LE_CONFIG_HOME"
   export LE_CONFIG_HOME
 
+  # Paths with whitespace break the unquoted $_CURL/$_WGET command expansion,
+  # so fail early with a clear error instead of a cryptic curl/wget failure.
+  # https://github.com/acmesh-official/acme.sh/issues/2163
+  case "$LE_WORKING_DIR$LE_CONFIG_HOME" in
+  *" "*)
+    _err "The --home or --config-home path can not contain spaces: '$LE_WORKING_DIR'"
+    _err "Please install $PROJECT_NAME to a path without spaces."
+    exit 1
+    ;;
+  esac
+
   _DEFAULT_ACCOUNT_CONF_PATH="$LE_CONFIG_HOME/account.conf"
 
   if [ -z "$ACCOUNT_CONF_PATH" ]; then
