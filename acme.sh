@@ -5751,6 +5751,17 @@ $_authorizations_map"
     fi
   fi
 
+  # Warn when the scheduled renewal falls after the cert has already expired,
+  # e.g. a 1-day cert from an internal CA combined with the default 60-day
+  # schedule, which computes from the creation date and never looks at
+  # notAfter. https://github.com/acmesh-official/acme.sh/issues/6917
+  _renew_chk_enddate="$(_enddate "$CERT_PATH")"
+  _renew_chk_endtime="$(_ssldate2time "$_renew_chk_enddate")"
+  if [ "$Le_NextRenewTime" ] && [ "$_renew_chk_endtime" ] && [ "$Le_NextRenewTime" -ge "$_renew_chk_endtime" ]; then
+    _info "$(__red "WARNING: the cert expires at $_renew_chk_enddate, BEFORE the next scheduled renewal time $Le_NextRenewTimeStr.")"
+    _info "$(__red "The cert will already be expired when the renewal runs. If your CA issues short-lived certs, use a negative --days value (e.g. --days -1) to renew relative to the expiry time.")"
+  fi
+
   _savedomainconf "Le_NextRenewTimeStr" "$Le_NextRenewTimeStr"
   _savedomainconf "Le_NextRenewTime" "$Le_NextRenewTime"
 
