@@ -6381,7 +6381,13 @@ deploy() {
   fi
 
   _debug2 DOMAIN_CONF "$DOMAIN_CONF"
-  . "$DOMAIN_CONF"
+  # The cert dir may exist without a domain conf (e.g. the conf was deleted, or
+  # the cert was placed here manually). Deploy can still proceed using env-provided
+  # settings, and _savedomainconf below will recreate the conf, so only source it
+  # when present instead of failing on a missing file.
+  if [ -f "$DOMAIN_CONF" ]; then
+    . "$DOMAIN_CONF"
+  fi
 
   _savedomainconf Le_DeployHook "$_hooks"
 
