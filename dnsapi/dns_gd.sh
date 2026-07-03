@@ -69,7 +69,12 @@ dns_gd_add() {
       return 1
     fi
 
-    if ! _contains "$response" "$txtvalue"; then
+    if _contains "$response" "UNKNOWN_DOMAIN"; then
+      # GoDaddy sometimes returns UNKNOWN_DOMAIN when reading a record back even
+      # though the PUT above succeeded; skip the local readback check and let
+      # acme.sh's own DNS propagation check verify the record was published.
+      _info "GoDaddy API won't allow reading the record back; skipping local verification."
+    elif ! _contains "$response" "$txtvalue"; then
       _err "TXT record '${txtvalue}' for '${fulldomain}', value wasn't set!"
       return 1
     fi
