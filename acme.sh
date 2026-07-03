@@ -1179,6 +1179,11 @@ _createkey() {
   length="$1"
   f="$2"
   _debug2 "_createkey for file:$f"
+  if ! _exists "${ACME_OPENSSL_BIN:-openssl}"; then
+    _err "Please install openssl first. ACME_OPENSSL_BIN=$ACME_OPENSSL_BIN"
+    _err "We need openssl to generate keys."
+    return 1
+  fi
   eccname="$length"
   if _startswith "$length" "ec-"; then
     length=$(printf "%s" "$length" | cut -d '-' -f 2-100)
@@ -1201,6 +1206,7 @@ _createkey() {
 
   _debug "Using length $length"
 
+  _new_key_file=""
   if ! [ -e "$f" ]; then
     if ! touch "$f" >/dev/null 2>&1; then
       _f_path="$(dirname "$f")"
@@ -1214,6 +1220,7 @@ _createkey() {
       return 1
     fi
     chmod 600 "$f"
+    _new_key_file="1"
   fi
 
   if _isEccKey "$length"; then
@@ -1222,6 +1229,10 @@ _createkey() {
       echo "$_opkey" >"$f"
     else
       _err "Error encountered for ECC key named $eccname"
+      #do not leave an empty file behind, or the next run would treat the key as existing
+      if [ "$_new_key_file" ]; then
+        rm -f "$f"
+      fi
       return 1
     fi
   else
@@ -1234,6 +1245,10 @@ _createkey() {
       echo "$_opkey" >"$f"
     else
       _err "Error encountered for RSA key of length $length"
+      #do not leave an empty file behind, or the next run would treat the key as existing
+      if [ "$_new_key_file" ]; then
+        rm -f "$f"
+      fi
       return 1
     fi
   fi
