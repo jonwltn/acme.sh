@@ -7199,6 +7199,12 @@ install() {
 
   if [ "$_DEFAULT_CERT_HOME" != "$CERT_HOME" ]; then
     _saveaccountconf "CERT_HOME" "$CERT_HOME"
+    # Create the custom cert home now instead of on first issuance, so the
+    # user can see --install honored it.
+    # https://github.com/acmesh-official/acme.sh/issues/4756
+    if [ ! -d "$CERT_HOME" ]; then
+      mkdir -p "$CERT_HOME"
+    fi
   fi
 
   if [ "$_DEFAULT_ACCOUNT_KEY_PATH" != "$ACCOUNT_KEY_PATH" ]; then
