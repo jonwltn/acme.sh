@@ -272,12 +272,18 @@ haproxy_deploy() {
           _cafile_argument=""
         fi
         _debug _cafile_argument "${_cafile_argument}"
-        # if OpenSSL/LibreSSL is v1.1 or above, the format for the -header option has changed
+        # OpenSSL 1.1+ expects -header Host=value (one argument), while
+        # LibreSSL keeps the old two-argument form -header Host value at any
+        # version (3.x/4.x), so it must be detected by name, not by number.
+        _openssl_name=$(${ACME_OPENSSL_BIN:-openssl} version | cut -d' ' -f1)
         _openssl_version=$(${ACME_OPENSSL_BIN:-openssl} version | cut -d' ' -f2)
+        _debug _openssl_name "${_openssl_name}"
         _debug _openssl_version "${_openssl_version}"
         _openssl_major=$(echo "${_openssl_version}" | cut -d '.' -f1)
         _openssl_minor=$(echo "${_openssl_version}" | cut -d '.' -f2)
-        if [ "${_openssl_major}" -eq "1" ] && [ "${_openssl_minor}" -ge "1" ] || [ "${_openssl_major}" -ge "2" ]; then
+        if [ "${_openssl_name}" = "LibreSSL" ]; then
+          _header_sep=" "
+        elif [ "${_openssl_major}" -eq "1" ] && [ "${_openssl_minor}" -ge "1" ] || [ "${_openssl_major}" -ge "2" ]; then
           _header_sep="="
         else
           _header_sep=" "
