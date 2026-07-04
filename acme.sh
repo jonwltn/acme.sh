@@ -1405,7 +1405,9 @@ _readSubjectFromCSR() {
     _usage "_readSubjectFromCSR mycsr.csr"
     return 1
   fi
-  ${ACME_OPENSSL_BIN:-openssl} req -noout -in "$_csrfile" -subject | tr ',' "\n" | _egrep_o "CN *=.*" | cut -d = -f 2 | cut -d / -f 1 | tr -d ' \n'
+  # -config /dev/null: reading a CSR needs no config, but a missing default
+  # openssl.cnf is fatal on some systems (e.g. NetBSD does not install one)
+  ${ACME_OPENSSL_BIN:-openssl} req -noout -in "$_csrfile" -subject -config /dev/null | tr ',' "\n" | _egrep_o "CN *=.*" | cut -d = -f 2 | cut -d / -f 1 | tr -d ' \n'
 }
 
 #_csrfile
@@ -1420,7 +1422,7 @@ _readSubjectAltNamesFromCSR() {
   _csrsubj="$(_readSubjectFromCSR "$_csrfile")"
   _debug _csrsubj "$_csrsubj"
 
-  _dnsAltnames="$(${ACME_OPENSSL_BIN:-openssl} req -noout -text -in "$_csrfile" | grep "^ *DNS:.*" | tr -d ' \n')"
+  _dnsAltnames="$(${ACME_OPENSSL_BIN:-openssl} req -noout -text -in "$_csrfile" -config /dev/null | grep "^ *DNS:.*" | tr -d ' \n')"
   _debug _dnsAltnames "$_dnsAltnames"
 
   # escape the wildcard '*' so it is not taken as a regex operator by grep/sed below
@@ -1447,7 +1449,7 @@ _readKeyLengthFromCSR() {
     return 1
   fi
 
-  _outcsr="$(${ACME_OPENSSL_BIN:-openssl} req -noout -text -in "$_csrfile")"
+  _outcsr="$(${ACME_OPENSSL_BIN:-openssl} req -noout -text -in "$_csrfile" -config /dev/null)"
   _debug2 _outcsr "$_outcsr"
   if _contains "$_outcsr" "Public Key Algorithm: id-ecPublicKey"; then
     _debug "ECC CSR"
