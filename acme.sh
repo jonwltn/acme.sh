@@ -1423,12 +1423,13 @@ _readSubjectAltNamesFromCSR() {
   _dnsAltnames="$(${ACME_OPENSSL_BIN:-openssl} req -noout -text -in "$_csrfile" | grep "^ *DNS:.*" | tr -d ' \n')"
   _debug _dnsAltnames "$_dnsAltnames"
 
-  if _contains "$_dnsAltnames," "DNS:$_csrsubj,"; then
+  # escape the wildcard '*' so it is not taken as a regex operator by grep/sed below
+  _excapedAlgnames="$(echo "$_dnsAltnames" | tr '*' '#')"
+  _debug _excapedAlgnames "$_excapedAlgnames"
+  _escapedSubject="$(echo "$_csrsubj" | tr '*' '#')"
+  _debug _escapedSubject "$_escapedSubject"
+  if _contains "$_excapedAlgnames," "DNS:$_escapedSubject,"; then
     _debug "AltNames contains subject"
-    _excapedAlgnames="$(echo "$_dnsAltnames" | tr '*' '#')"
-    _debug _excapedAlgnames "$_excapedAlgnames"
-    _escapedSubject="$(echo "$_csrsubj" | tr '*' '#')"
-    _debug _escapedSubject "$_escapedSubject"
     _dnsAltnames="$(echo "$_excapedAlgnames," | sed "s/DNS:$_escapedSubject,//g" | tr '#' '*' | sed "s/,\$//g")"
     _debug _dnsAltnames "$_dnsAltnames"
   else
