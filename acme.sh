@@ -918,6 +918,15 @@ _json_decode() {
   echo "$_j_str"
 }
 
+#extract the authorization URLs from an order response on stdin, as a
+#comma-separated list. The entries are quoted URL strings and a quote cannot
+#occur inside a URL, so the first '"]' is always the end of the array. A
+#char-class scan would stop early on the brackets of an IPv6 host
+#(https://[2001:db8::1]/...). Outputs nothing if the field is missing.
+_authorizations_from_order() {
+  sed -n 's/.*"authorizations" *: *\[//p' | sed 's/" *\].*//' | tr -d '" '
+}
+
 #options file
 _sed_i() {
   options="$1"
@@ -4981,7 +4990,7 @@ issue() {
     #for dns manual mode
     _savedomainconf "Le_OrderFinalize" "$Le_OrderFinalize"
 
-    _authorizations_seg="$(echo "$response" | _json_decode | _egrep_o '"authorizations" *: *\[[^\[]*\]' | cut -d '[' -f 2 | tr -d ']' | tr -d '"')"
+    _authorizations_seg="$(echo "$response" | _json_decode | _authorizations_from_order)"
     _debug2 _authorizations_seg "$_authorizations_seg"
     if [ -z "$_authorizations_seg" ]; then
       _err "_authorizations_seg not found."
@@ -6839,7 +6848,7 @@ _deactivate() {
     _err "Cannot get new order for domain."
     return 1
   fi
-  _authorizations_seg="$(echo "$response" | _egrep_o '"authorizations" *: *\[[^\]*\]' | cut -d '[' -f 2 | tr -d ']' | tr -d '"')"
+  _authorizations_seg="$(echo "$response" | _json_decode | _authorizations_from_order)"
   _debug2 _authorizations_seg "$_authorizations_seg"
   if [ -z "$_authorizations_seg" ]; then
     _err "_authorizations_seg not found."
