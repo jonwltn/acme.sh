@@ -4598,16 +4598,25 @@ _match_issuer() {
 
 #ip
 _isIPv4() {
-  for seg in $(echo "$1" | tr '.' ' '); do
-    _debug2 seg "$seg"
-    if [ "$(echo "$seg" | tr -d '[0-9]')" ]; then
-      #not all number
+  #splitting must not glob: a "*" segment would match files in cwd
+  set -f
+  _ipv4_saved_ifs="$IFS"
+  IFS='.'
+  # shellcheck disable=SC2086
+  set -- $1
+  IFS="$_ipv4_saved_ifs"
+  set +f
+  if [ $# -ne 4 ]; then
+    return 1
+  fi
+  for _ipv4_seg in "$@"; do
+    _debug2 _ipv4_seg "$_ipv4_seg"
+    case "$_ipv4_seg" in
+    *[!0-9]* | "") return 1 ;;
+    esac
+    if [ "${#_ipv4_seg}" -gt 3 ] || [ "$_ipv4_seg" -gt 255 ]; then
       return 1
     fi
-    if [ $seg -ge 0 ] && [ $seg -lt 256 ]; then
-      continue
-    fi
-    return 1
   done
   return 0
 }
