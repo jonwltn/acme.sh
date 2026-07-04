@@ -322,8 +322,8 @@ synology_dsm_deploy() {
     _savedeployconf SYNO_USE_TEMP_ADMIN "$SYNO_USE_TEMP_ADMIN"
     _savedeployconf SYNO_LOCAL_HOSTNAME "$SYNO_LOCAL_HOSTNAME"
   else
-    _savedeployconf SYNO_USERNAME "$SYNO_USERNAME"
-    _savedeployconf SYNO_PASSWORD "$SYNO_PASSWORD"
+    _savedeployconf SYNO_USERNAME "$SYNO_USERNAME" "base64"
+    _savedeployconf SYNO_PASSWORD "$SYNO_PASSWORD" "base64"
     _savedeployconf SYNO_DEVICE_ID "$SYNO_DEVICE_ID"
     _savedeployconf SYNO_DEVICE_NAME "$SYNO_DEVICE_NAME"
   fi
