@@ -4042,7 +4042,9 @@ _regAccount() {
   _debug "Calc CA_KEY_HASH" "$CA_KEY_HASH"
   _savecaconf CA_KEY_HASH "$CA_KEY_HASH"
 
-  if [ "$code" = '403' ]; then
+  #RFC 8555 sec 7.3.6 requires 401 for requests from a deactivated account,
+  #but Boulder (Let's Encrypt) historically returns 403. Accept both.
+  if [ "$code" = '403' ] || [ "$code" = '401' ]; then
     _err "It seems that the account key has been deactivated, please use a new account key."
     return 1
   fi
@@ -4122,7 +4124,8 @@ deactivateaccount() {
   if _send_signed_request "$_accUri" "$_djson" && _contains "$response" '"deactivated"'; then
     _info "Successfully deactivated account $_accUri."
     _accid=$(echo "$response" | _egrep_o "\"id\" *: *[^,]*," | cut -d : -f 2 | tr -d ' ,')
-  elif [ "$code" = "403" ]; then
+  elif [ "$code" = "403" ] || [ "$code" = "401" ]; then
+    #RFC 8555 sec 7.3.6: 401 from a deactivated account; Boulder returns 403
     _info "The account is already deactivated."
     _accid=$(_getfield "$_accUri" "999" "/")
   else
