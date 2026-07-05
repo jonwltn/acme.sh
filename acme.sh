@@ -3917,6 +3917,16 @@ __calc_account_thumbprint() {
   printf "%s" "$jwk" | tr -d ' ' | _digest "sha256" | _url_replace
 }
 
+#Reads a comma- or space-separated email list from stdin and prints
+#the ACME contact list items: "mailto:a@example.com","mailto:b@example.com"
+_mailto_contacts() {
+  _mc_out=""
+  for _mc_m in $(tr ',' ' '); do
+    _mc_out="$_mc_out,\"mailto:$_mc_m\""
+  done
+  echo "$_mc_out" | cut -c 2-
+}
+
 _getAccountEmail() {
   if [ "$ACCOUNT_EMAIL" ]; then
     echo "$ACCOUNT_EMAIL"
@@ -3976,7 +3986,9 @@ _regAccount() {
         _info "See: $(__green "$_ZEROSSL_WIKI")"
         return 1
       fi
-      _eabresp=$(_post "email=$_email" $_ZERO_EAB_ENDPOINT)
+      #the ZeroSSL EAB endpoint takes a single address, use the first one
+      _eab_email="$(echo "$_email" | tr ',' ' ' | awk '{print $1}')"
+      _eabresp=$(_post "email=$_eab_email" $_ZERO_EAB_ENDPOINT)
       if [ "$?" != "0" ]; then
         _debug2 "$_eabresp"
         _err "Cannot get EAB credentials from ZeroSSL."
@@ -4026,7 +4038,7 @@ _regAccount() {
     _debug3 externalBinding "$externalBinding"
   fi
   if [ "$_email" ]; then
-    email_sg="\"contact\": [\"mailto:$_email\"], "
+    email_sg="\"contact\": [$(echo "$_email" | _mailto_contacts)], "
   fi
   regjson="{$email_sg\"termsOfServiceAgreed\": true$externalBinding}"
 
@@ -4106,7 +4118,7 @@ updateaccount() {
   _email="$(_getAccountEmail)"
 
   if [ "$_email" ]; then
-    updjson='{"contact": ["mailto:'$_email'"]}'
+    updjson='{"contact": ['$(echo "$_email" | _mailto_contacts)']}'
   else
     updjson='{"contact": []}'
   fi
