@@ -7236,6 +7236,10 @@ _installalias() {
     _sed_i "/^export LE_CONFIG_HOME/d" "$_envfile"
   fi
   _setopt "$_envfile" "alias $PROJECT_ENTRY" "=" "\"$LE_WORKING_DIR/$PROJECT_ENTRY$_c_entry\""
+  if [ -f "$LE_WORKING_DIR/$PROJECT_ENTRY.completion" ]; then
+    #the completion file does nothing when sourced by a non-bash shell
+    _setopt "$_envfile" ". \"$LE_WORKING_DIR/$PROJECT_ENTRY.completion\""
+  fi
 
   _profile="$(_detect_profile)"
   if [ "$_profile" ]; then
@@ -7353,6 +7357,11 @@ install() {
 
   _info "Installed to $LE_WORKING_DIR/$PROJECT_ENTRY"
 
+  if [ -f "$PROJECT_ENTRY.completion" ]; then
+    cp "$PROJECT_ENTRY.completion" "$LE_WORKING_DIR/"
+    _debug "Installed bash completion to $LE_WORKING_DIR/$PROJECT_ENTRY.completion"
+  fi
+
   if [ "$_ACME_IN_CRON" != "1" ] && [ -z "$_noprofile" ]; then
     _installalias "$_c_home"
   fi
@@ -7430,6 +7439,7 @@ uninstall() {
   _uninstallalias
 
   rm -f "$LE_WORKING_DIR/$PROJECT_ENTRY"
+  rm -f "$LE_WORKING_DIR/$PROJECT_ENTRY.completion"
   _info "The keys and certs are in \"$(__green "$LE_CONFIG_HOME")\". You can remove them by yourself."
 
 }
@@ -7739,6 +7749,7 @@ Parameters:
   --config-home <directory>         Specifies the home dir to save all the configurations.
   --useragent <string>              Specifies the user agent string. it will be saved for future use too.
   -m, --email <email>               Specifies the account email, only valid for the '--install' and '--update-account' command.
+                                      Multiple emails can be given as a comma-separated list: 'a@example.com,b@example.com'
   --accountkey <file>               Specifies the account key path, only valid for the '--install' command.
   --days <ndays>                    Specifies the days to renew the cert when using '--issue' command. The default value is $DEFAULT_RENEW days.
                                       Negative values could be used to specify a number of days relative to the expiration date of the certificate.
