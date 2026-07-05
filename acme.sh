@@ -1307,6 +1307,23 @@ _idn() {
 }
 
 #_createcsr  cn  san_list  keyfile csrfile conf acmeValidationv1 extendedUsage
+#cn
+#The x509 Common Name is limited to 64 characters (RFC 5280 ub-common-name,
+#enforced by openssl in ASN1_mbstring_ncopy), and an IP address or an empty
+#name is not usable as CN either. When this rejects the name, _createcsr
+#omits CN from the CSR subject and the CA takes the identifiers from the
+#subjectAltName extension (issue 4867).
+_is_valid_cn() {
+  _cn_v="$1"
+  if [ -z "$_cn_v" ] || [ "${#_cn_v}" -gt 64 ]; then
+    return 1
+  fi
+  if _isIP "$_cn_v"; then
+    return 1
+  fi
+  return 0
+}
+
 _createcsr() {
   _debug _createcsr
   domain="$1"
@@ -1370,16 +1387,16 @@ _createcsr() {
   _csr_cn="$(_idn "$domain")"
   _debug2 _csr_cn "$_csr_cn"
   if _contains "$(uname -a)" "MINGW"; then
-    if _isIP "$_csr_cn"; then
-      ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "//O=$PROJECT_NAME" -config "$csrconf" -out "$csr"
-    else
+    if _is_valid_cn "$_csr_cn"; then
       ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "//CN=$_csr_cn" -config "$csrconf" -out "$csr"
+    else
+      ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "//O=$PROJECT_NAME" -config "$csrconf" -out "$csr"
     fi
   else
-    if _isIP "$_csr_cn"; then
-      ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "/O=$PROJECT_NAME" -config "$csrconf" -out "$csr"
-    else
+    if _is_valid_cn "$_csr_cn"; then
       ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "/CN=$_csr_cn" -config "$csrconf" -out "$csr"
+    else
+      ${ACME_OPENSSL_BIN:-openssl} req -new -sha256 -key "$csrkey" -subj "/O=$PROJECT_NAME" -config "$csrconf" -out "$csr"
     fi
   fi
 }
