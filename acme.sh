@@ -1547,6 +1547,22 @@ _toPkcs() {
 
 }
 
+_toPkcs8() {
+  _cpkcs8="$1"
+  _ckey="$2"
+  pkcs8Password="$3"
+
+  if [ "$pkcs8Password" ]; then
+    ${ACME_OPENSSL_BIN:-openssl} pkcs8 -topk8 -inform PEM -outform PEM -v2 aes256 -passout "pass:$pkcs8Password" -in "$_ckey" -out "$_cpkcs8"
+  else
+    ${ACME_OPENSSL_BIN:-openssl} pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in "$_ckey" -out "$_cpkcs8"
+  fi
+  if [ "$?" = "0" ]; then
+    _savedomainconf "Le_PKCS8Password" "$pkcs8Password" "base64"
+  fi
+
+}
+
 #domain [password] [isEcc]
 toPkcs() {
   domain="$1"
@@ -1568,20 +1584,21 @@ toPkcs() {
 
 }
 
-#domain [isEcc]
+#domain [password] [isEcc]
 toPkcs8() {
   domain="$1"
+  pkcs8Password="$2"
 
   if [ -z "$domain" ]; then
-    _usage "Usage: $PROJECT_ENTRY --to-pkcs8 --domain <domain.tld> [--ecc]"
+    _usage "Usage: $PROJECT_ENTRY --to-pkcs8 --domain <domain.tld> [--password <password>] [--ecc]"
     return 1
   fi
 
-  _isEcc="$2"
+  _isEcc="$3"
 
   _initpath "$domain" "$_isEcc"
 
-  ${ACME_OPENSSL_BIN:-openssl} pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in "$CERT_KEY_PATH" -out "$CERT_PKCS8_PATH"
+  _toPkcs8 "$CERT_PKCS8_PATH" "$CERT_KEY_PATH" "$pkcs8Password"
 
   if [ "$?" = "0" ]; then
     _info "Success, $CERT_PKCS8_PATH"
@@ -5889,6 +5906,12 @@ $_authorizations_map"
     _toPkcs "$CERT_PFX_PATH" "$CERT_KEY_PATH" "$CERT_PATH" "$CA_CERT_PATH" "$Le_PFXPassword"
   fi
 
+  #convert to pkcs8
+  Le_PKCS8Password="$(_readdomainconf Le_PKCS8Password)"
+  if [ "$Le_PKCS8Password" ]; then
+    _toPkcs8 "$CERT_PKCS8_PATH" "$CERT_KEY_PATH" "$Le_PKCS8Password"
+  fi
+
   if [ "$_real_cert$_real_key$_real_ca$_reload_cmd$_real_fullchain" ]; then
     _savedomainconf "Le_RealCertPath" "$_real_cert"
     _savedomainconf "Le_RealCACertPath" "$_real_ca"
@@ -7801,7 +7824,7 @@ Parameters:
   --revoke-reason <0-10>            The reason for revocation, can be used in conjunction with the '--revoke' command.
                                       See: $_REVOKE_WIKI
 
-  --password <password>             Add a password to exported pfx file. Use with --to-pkcs12.
+  --password <password>             Add a password to the exported pfx or pkcs8 file. Use with '--to-pkcs12' or '--to-pkcs8'.
 
 
 "
@@ -8818,7 +8841,7 @@ _process() {
     toPkcs "$_domain" "$_password" "$_ecc"
     ;;
   toPkcs8)
-    toPkcs8 "$_domain" "$_ecc"
+    toPkcs8 "$_domain" "$_password" "$_ecc"
     ;;
   createAccountKey)
     createAccountKey "$_accountkeylength"
