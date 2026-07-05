@@ -3448,9 +3448,14 @@ _setNginx() {
   fi
 
   echo "$NGINX_START
-location ~ \"^/\.well-known/acme-challenge/([-_a-zA-Z0-9]+)\$\" {
-  default_type text/plain;
-  return 200 \"\$1.$_thumbpt\";
+location ^~ /.well-known/acme-challenge/ {
+  # the ^~ prefix wins over regex-skipping blocks like \"location ^~ /\",
+  # the nested regex location still captures the token as \$1
+  location ~ \"^/\.well-known/acme-challenge/([-_a-zA-Z0-9]+)\$\" {
+    default_type text/plain;
+    return 200 \"\$1.$_thumbpt\";
+  }
+  return 404;
 }
 #NGINX_START
 " >>"$FOUND_REAL_NGINX_CONF"
