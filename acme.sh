@@ -4014,6 +4014,10 @@ _regAccount() {
 
     key_hex="$(_durl_replace_base64 "$_eab_hmac_key" | _dbase64 | _hex_dump | tr -d ' ')"
     _debug3 key_hex "$key_hex"
+    if [ -z "$key_hex" ]; then
+      _err "Cannot base64-decode the eab-hmac-key. Please check the value, and your openssl version."
+      return 1
+    fi
 
     eab_signature=$(printf "%s" "$eab_sign_t" | _hmac sha256 $key_hex | _base64 | _url_replace)
     _debug3 eab_signature "$eab_signature"
