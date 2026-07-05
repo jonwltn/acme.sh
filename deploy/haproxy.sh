@@ -364,7 +364,9 @@ haproxy_deploy() {
         else
           _info "Update existing certificate '${_pem}' over HAProxy ${_socketname}."
         fi
-        _socat_cert_set_cmd="echo -e '${_cmdpfx}set ssl cert ${_pem} <<\n$(cat "${_pem}")\n' | socat '${_statssock}' - | grep -q 'Transaction created'"
+        # printf %b, not "echo -e": dash's echo has no -e and sends a literal "-e " to the socket.
+        # "Transaction updated" is replied instead of "created" when an uncommitted transaction exists.
+        _socat_cert_set_cmd="printf '%b\n' '${_cmdpfx}set ssl cert ${_pem} <<\n$(cat "${_pem}")\n' | socat '${_statssock}' - | grep -qE 'Transaction (created|updated)'"
         _secure_debug _socat_cert_set_cmd "${_socat_cert_set_cmd}"
         eval "${_socat_cert_set_cmd}"
         _ret=$?
