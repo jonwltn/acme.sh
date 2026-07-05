@@ -3,6 +3,8 @@
 #DEPLOY_DOCKER_CONTAINER_LABEL="xxxxxxx"
 
 #DEPLOY_DOCKER_CONTAINER_KEY_FILE="/path/to/key.pem"
+#DEPLOY_DOCKER_CONTAINER_KEY_MODE="0640"
+#DEPLOY_DOCKER_CONTAINER_KEY_OWNER="1000:1000"
 #DEPLOY_DOCKER_CONTAINER_CERT_FILE="/path/to/cert.pem"
 #DEPLOY_DOCKER_CONTAINER_CA_FILE="/path/to/ca.pem"
 #DEPLOY_DOCKER_CONTAINER_FULLCHAIN_FILE="/path/to/fullchain.pem"
@@ -71,6 +73,18 @@ docker_deploy() {
     _savedeployconf DEPLOY_DOCKER_CONTAINER_KEY_FILE "$DEPLOY_DOCKER_CONTAINER_KEY_FILE"
   fi
 
+  _getdeployconf DEPLOY_DOCKER_CONTAINER_KEY_MODE
+  _debug2 DEPLOY_DOCKER_CONTAINER_KEY_MODE "$DEPLOY_DOCKER_CONTAINER_KEY_MODE"
+  if [ "$DEPLOY_DOCKER_CONTAINER_KEY_MODE" ]; then
+    _savedeployconf DEPLOY_DOCKER_CONTAINER_KEY_MODE "$DEPLOY_DOCKER_CONTAINER_KEY_MODE"
+  fi
+
+  _getdeployconf DEPLOY_DOCKER_CONTAINER_KEY_OWNER
+  _debug2 DEPLOY_DOCKER_CONTAINER_KEY_OWNER "$DEPLOY_DOCKER_CONTAINER_KEY_OWNER"
+  if [ "$DEPLOY_DOCKER_CONTAINER_KEY_OWNER" ]; then
+    _savedeployconf DEPLOY_DOCKER_CONTAINER_KEY_OWNER "$DEPLOY_DOCKER_CONTAINER_KEY_OWNER"
+  fi
+
   _getdeployconf DEPLOY_DOCKER_CONTAINER_CERT_FILE
   _debug2 DEPLOY_DOCKER_CONTAINER_CERT_FILE "$DEPLOY_DOCKER_CONTAINER_CERT_FILE"
   if [ "$DEPLOY_DOCKER_CONTAINER_CERT_FILE" ]; then
@@ -111,6 +125,20 @@ docker_deploy() {
   if [ "$DEPLOY_DOCKER_CONTAINER_KEY_FILE" ]; then
     if ! _docker_cp "$_cid" "$_ckey" "$DEPLOY_DOCKER_CONTAINER_KEY_FILE"; then
       return 1
+    fi
+    if [ "$DEPLOY_DOCKER_CONTAINER_KEY_OWNER" ]; then
+      _info "Setting key file owner to $DEPLOY_DOCKER_CONTAINER_KEY_OWNER"
+      if ! _docker_exec "$_cid" chown "$DEPLOY_DOCKER_CONTAINER_KEY_OWNER" "$DEPLOY_DOCKER_CONTAINER_KEY_FILE"; then
+        _err "Can not change owner of key file in container"
+        return 1
+      fi
+    fi
+    if [ "$DEPLOY_DOCKER_CONTAINER_KEY_MODE" ]; then
+      _info "Setting key file mode to $DEPLOY_DOCKER_CONTAINER_KEY_MODE"
+      if ! _docker_exec "$_cid" chmod "$DEPLOY_DOCKER_CONTAINER_KEY_MODE" "$DEPLOY_DOCKER_CONTAINER_KEY_FILE"; then
+        _err "Can not change mode of key file in container"
+        return 1
+      fi
     fi
   fi
 
