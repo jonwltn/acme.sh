@@ -43,7 +43,10 @@ jobs:
       - name: Enforce wiki rules
         id: guard
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # WIKI_GUARD_TOKEN: a PAT with read:org, needed to enumerate
+          # members whose write access comes via the organization -- the
+          # repo-scoped GITHUB_TOKEN only sees direct collaborators.
+          GH_TOKEN: ${{ secrets.WIKI_GUARD_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           # Logins with write (push) access to the repository, including
           # organization members -- they may delete/rename pages and edit
@@ -54,6 +57,7 @@ jobs:
             -q '.[] | select(.permissions.push) | .login' 2>/dev/null \
             | tr 'A-Z' 'a-z' | sort -u > writers.txt || true
           echo "write-access members loaded: $(wc -l < writers.txt)"
+          cat writers.txt
           cd wiki
           git config core.quotePath false
 
