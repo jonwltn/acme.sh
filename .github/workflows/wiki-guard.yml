@@ -19,6 +19,12 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   gollum:
+  # Piggyback on frequent repo activity, because the cron schedule is
+  # best-effort and often delayed well beyond its interval.
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
 
 permissions:
