@@ -57,7 +57,6 @@ jobs:
             -q '.[] | select(.permissions.push) | .login' 2>/dev/null \
             | tr 'A-Z' 'a-z' | sort -u > writers.txt || true
           echo "write-access members loaded: $(wc -l < writers.txt)"
-          cat writers.txt
           cd wiki
           git config core.quotePath false
 
