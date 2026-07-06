@@ -2,6 +2,12 @@ name: "Update issues"
 on:
   issues:
     types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
 
 jobs:
   comment:
@@ -10,6 +16,46 @@ jobs:
       - uses: actions/github-script@v9
         with:
           script: |
+            const item = context.payload.issue || context.payload.pull_request;
+
+            // Close on sight anything opened by a user on the wiki Blacklist
+            // page (maintained by the Wiki Guard workflow).
+            let blacklist = [];
+            try {
+              const res = await fetch(`https://raw.githubusercontent.com/wiki/${context.repo.owner}/${context.repo.repo}/Blacklist.md`);
+              if (res.ok) {
+                blacklist = (await res.text()).split("\n")
+                  .filter(l => l.startsWith("- "))
+                  .map(l => l.slice(2).trim().toLowerCase())
+                  .filter(Boolean);
+              }
+            } catch (e) {
+              core.warning(`Failed to fetch the blacklist: ${e}`);
+            }
+            if (blacklist.includes(item.user.login.toLowerCase())) {
+              if (context.payload.pull_request) {
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: item.number,
+                  state: "closed"
+                });
+              } else {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: item.number,
+                  state: "closed",
+                  state_reason: "not_planned"
+                });
+              }
+              return;
+            }
+
+            if (context.payload.pull_request) {
+              return;
+            }
+
             const issue = context.payload.issue;
             if (issue.title.startsWith("Report bugs to")) {
               // Tracking issue for a third-party dns/deploy/notify api:
