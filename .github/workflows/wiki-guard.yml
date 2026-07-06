@@ -53,6 +53,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/collaborators?per_page=100" --paginate \
             -q '.[] | select(.permissions.push) | .login' 2>/dev/null \
             | tr 'A-Z' 'a-z' | sort -u > writers.txt || true
+          echo "write-access members loaded: $(wc -l < writers.txt)"
           cd wiki
           git config core.quotePath false
 
