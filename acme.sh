@@ -4154,6 +4154,93 @@ updateaccount() {
   fi
 }
 
+#Implement account key rollover
+updateaccountkey() {
+  _length="$1"
+  _initpath
+
+  if [ ! -f "$ACCOUNT_KEY_PATH" ]; then
+    _err "Account key not found at: $ACCOUNT_KEY_PATH"
+    return 1
+  fi
+  ACCOUNT_KEY_PATH_NEW="$ACCOUNT_KEY_PATH.new"
+
+  _accUri=$(_readcaconf "ACCOUNT_URL")
+  _debug _accUri "$_accUri"
+
+  if [ -z "$_accUri" ]; then
+    _err "The account URL is empty, please run '--update-account' first to update the account info, then try again."
+    return 1
+  fi
+  if ! _calcjwk "$ACCOUNT_KEY_PATH"; then
+    return 1
+  fi
+  _inner_payload="{\"account\": \"$_accUri\", \"oldKey\": $jwk}"
+
+  _initAPI
+  if [ -z "$ACME_KEY_CHANGE" ]; then
+    _err "Server does not expose keyChange url."
+    return 1
+  fi
+
+  _url="$ACME_KEY_CHANGE"
+  if _createkey "$_length" "$ACCOUNT_KEY_PATH_NEW"; then
+    _info "New account key creation OK."
+  else
+    _err "New account key creation error."
+    return 1
+  fi
+
+  if ! _calcjwk "$ACCOUNT_KEY_PATH_NEW"; then
+    rm -f "$ACCOUNT_KEY_PATH_NEW"
+    return 1
+  fi
+  _inner_protected="{\"url\": \"${_url}$JWK_HEADERPLACE_PART2, \"jwk\": $jwk"'}'
+  _inner_protected64="$(printf "%s" "$_inner_protected" | _base64 | _url_replace)"
+  _inner_payload64="$(printf "%s" "$_inner_payload" | _base64 | _url_replace)"
+  if ! _inner_sig_t="$(printf "%s" "$_inner_protected64.$_inner_payload64" | _sign "$ACCOUNT_KEY_PATH_NEW" "sha256")"; then
+    _err "Sign request failed."
+    rm -f "$ACCOUNT_KEY_PATH_NEW"
+    return 1
+  fi
+  _debug3 _inner_sig_t "$_inner_sig_t"
+
+  _inner_sig="$(printf "%s" "$_inner_sig_t" | _url_replace)"
+  _debug3 _inner_sig "$_inner_sig"
+
+  _body="{\"protected\": \"$_inner_protected64\", \"payload\": \"$_inner_payload64\", \"signature\": \"$_inner_sig\"}"
+
+  if ! _send_signed_request "$_url" "$_body" "" "$ACCOUNT_KEY_PATH"; then
+    _err "Error rotating account key: $response."
+    rm -f "$ACCOUNT_KEY_PATH_NEW"
+    return 1
+  fi
+
+  if [ "$code" = '200' ]; then
+    echo "$response" >"$ACCOUNT_JSON_PATH"
+    mv -f "$ACCOUNT_KEY_PATH_NEW" "$ACCOUNT_KEY_PATH"
+    _info "Account key rotation success for $_accUri."
+  elif [ "$code" = "409" ]; then
+    _err "An existing account is using the new key"
+    rm -f "$ACCOUNT_KEY_PATH_NEW"
+    return 1
+  else
+    _err "Account key rollover error: $response"
+    rm -f "$ACCOUNT_KEY_PATH_NEW"
+    return 1
+  fi
+
+  __CACHED_JWK_KEY_FILE=""
+  _calcjwk "$ACCOUNT_KEY_PATH"
+
+  ACCOUNT_THUMBPRINT="$(__calc_account_thumbprint)"
+  _info "ACCOUNT_THUMBPRINT" "$ACCOUNT_THUMBPRINT"
+
+  CA_KEY_HASH="$(__calcAccountKeyHash)"
+  _debug "Calc CA_KEY_HASH" "$CA_KEY_HASH"
+  _savecaconf CA_KEY_HASH "$CA_KEY_HASH"
+}
+
 #Implement deactivate account
 deactivateaccount() {
   _initpath
@@ -7786,6 +7873,7 @@ Commands:
   -ccr, --create-csr       Create CSR, professional use.
   --create-domain-key      Create an domain private key, professional use.
   --update-account         Update account info.
+  --update-account-key     Rotate account key.
   --register-account       Register account key.
   --deactivate-account     Deactivate the account.
   --make-dns-persist-value Print the DNS TXT record(s) to enable persistent DNS validation
@@ -8337,6 +8425,9 @@ _process() {
       ;;
     --update-account | --updateaccount)
       _CMD="updateaccount"
+      ;;
+    --update-account-key | --updateaccountkey)
+      _CMD="updateaccountkey"
       ;;
     --register-account | --registeraccount)
       _CMD="registeraccount"
@@ -8930,6 +9021,9 @@ _process() {
     ;;
   updateaccount)
     updateaccount
+    ;;
+  updateaccountkey)
+    updateaccountkey "$_accountkeylength"
     ;;
   deactivateaccount)
     deactivateaccount
