@@ -57,6 +57,10 @@ jobs:
             }
 
             const issue = context.payload.issue;
+            if (issue.title.startsWith("blacklist:") || issue.title.startsWith("revert:")) {
+              // Handled by the Blacklist / Revert Command workflows.
+              return;
+            }
             if (issue.title.startsWith("Report bugs to")) {
               // Tracking issue for a third-party dns/deploy/notify api:
               // no upgrade boilerplate; assign it to the opener and label it.
