@@ -424,11 +424,6 @@ _temp_admin_cleanup() {
   fi
 }
 
-#_cleardeployconf   key
-_cleardeployconf() {
-  _cleardomainconf "SAVED_$1"
-}
-
 # key
 _check2cleardeployconfexp() {
   _key="$1"

@@ -2595,6 +2595,13 @@ _savedeployconf() {
 }
 
 #key
+_cleardeployconf() {
+  _cleardomainconf "SAVED_$1"
+  #remove later
+  _cleardomainconf "$1"
+}
+
+#key
 _getdeployconf() {
   _rac_key="$1"
   _rac_value="$(eval echo \$"$_rac_key")"
