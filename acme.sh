@@ -5350,6 +5350,8 @@ $_authorizations_map"
         fi
         _d_alias="$(_getfield "$_challenge_alias" "$_alias_index")"
         test "$_d_alias" = "$NO_VALUE" && _d_alias=""
+        # strip the trailing dot of a fully-qualified alias domain
+        _d_alias="${_d_alias%.}"
         _alias_index="$(_math "$_alias_index" + 1)"
         _debug "_d_alias" "$_d_alias"
         if [ "$_d_alias" ]; then
