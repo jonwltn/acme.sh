@@ -65,7 +65,7 @@ waha_send() {
   _waha_url="${WAHA_URL}/api/sendText"
   response="$(_post "$_data" "$_waha_url" "" "POST" "application/json")"
 
-  if [ "$?" = "0" ] && _contains "$response" "id"; then
+  if [ "$?" = "0" ] && _contains "$response" "\"id\""; then
     _info "waha send success."
     return 0
   fi
