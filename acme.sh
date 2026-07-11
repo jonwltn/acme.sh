@@ -7765,6 +7765,14 @@ _send_notify() {
       continue
     fi
     if ! (
+      # The dns/deploy hooks export _H1.._H5 in the main process, so the
+      # values are inherited here. Clear them: a stale Authorization header
+      # from another service must not leak into the notify request.
+      export _H1=""
+      export _H2=""
+      export _H3=""
+      export _H4=""
+      export _H5=""
       if ! . "$_n_hook_file"; then
         _err "Error loading file $_n_hook_file. Please check your API file and try again."
         return 1
