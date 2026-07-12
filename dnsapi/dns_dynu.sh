@@ -214,11 +214,11 @@ _dynu_authentication() {
 
   response="$(_get "$Dynu_EndPoint/oauth2/token")"
   if [ "$?" != "0" ]; then
-    _err "Authentication failed."
+    _err "Authentication failed: no response from $Dynu_EndPoint/oauth2/token"
     return 1
   fi
   if _contains "$response" "Authentication Exception"; then
-    _err "Authentication failed."
+    _err "Authentication failed. Server response: $response"
     return 1
   fi
   if _contains "$response" "access_token"; then
