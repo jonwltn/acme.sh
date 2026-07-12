@@ -7003,15 +7003,35 @@ installcronjob() {
     return 1
   fi
   _info "Installing cron job"
-  if ! $_CRONTAB -l 2>/dev/null | grep "$PROJECT_ENTRY --cron"; then
+  _cron_entry="$random_minute $random_hour,$(_math "$random_hour" + 6),$(_math "$random_hour" + 12),$(_math "$random_hour" + 18) * * * $lesh --cron --home \"$LE_WORKING_DIR\" $_c_entry> /dev/null"
+  _cron_entries="$($_CRONTAB -l 2>/dev/null)"
+  if [ "$?" != "0" ]; then
+    #when the user has no crontab yet, crontab -l also exits non-zero;
+    #only that case may proceed with an empty list. Any other listing
+    #failure must abort: piping an incomplete list back into 'crontab -'
+    #would wipe the user's existing cron jobs (issue 3079)
+    _cron_list_err="$($_CRONTAB -l 2>&1 >/dev/null)"
+    if echo "$_cron_list_err" | grep -i "no crontab\|no fcrontab\|can't open" >/dev/null; then
+      _cron_entries=""
+    else
+      _err "Can not list the current cron jobs: $_cron_list_err"
+      _err "Refusing to install the cron job, that could wipe your existing cron jobs."
+      _err "Please add this cron job manually:"
+      _err "$_cron_entry"
+      return 1
+    fi
+  fi
+  if ! echo "$_cron_entries" | grep "$PROJECT_ENTRY --cron"; then
     if _exists uname && uname -a | grep SunOS >/dev/null; then
       _CRONTAB_STDIN="$_CRONTAB --"
     else
       _CRONTAB_STDIN="$_CRONTAB -"
     fi
-    $_CRONTAB -l 2>/dev/null | {
-      cat
-      echo "$random_minute $random_hour,$(_math $random_hour + 6),$(_math $random_hour + 12),$(_math $random_hour + 18) * * * $lesh --cron --home \"$LE_WORKING_DIR\" $_c_entry> /dev/null"
+    {
+      if [ "$_cron_entries" ]; then
+        echo "$_cron_entries"
+      fi
+      echo "$_cron_entry"
     } | $_CRONTAB_STDIN
   fi
   if [ "$?" != "0" ]; then
