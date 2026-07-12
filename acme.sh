@@ -1968,6 +1968,33 @@ _utc_date() {
   date -u "+%Y-%m-%d %H:%M:%S"
 }
 
+#Usage: _calc_next_renew_time createtime renewaldays [endtime]
+#Prints createtime + renewaldays*86400 - 86400, capped so it never passes
+#the certificate expiry: with short-lived certs (internal CAs, upcoming
+#CA/B SC-081 47-day maximum) a fixed RenewalDays would otherwise schedule
+#the renewal after notAfter and leave an expired cert in place.
+#The cap is one day before endtime, or one hour before for certs whose
+#lifetime is 24 hours or less, mirroring the --valid-to scheduling.
+_calc_next_renew_time() {
+  _cnrt_create="$1"
+  _cnrt_days="$2"
+  _cnrt_end="$3"
+  _cnrt_next=$(_math "$_cnrt_create" + "$_cnrt_days" \* 24 \* 60 \* 60 - 86400)
+  if [ -z "$_cnrt_end" ]; then
+    printf "%s" "$_cnrt_next"
+    return 0
+  fi
+  if [ "$(_math "$_cnrt_end" - "$_cnrt_create")" -gt 86400 ]; then
+    _cnrt_cap=$(_math "$_cnrt_end" - 86400)
+  else
+    _cnrt_cap=$(_math "$_cnrt_end" - 3600)
+  fi
+  if [ "$_cnrt_next" -gt "$_cnrt_cap" ]; then
+    _cnrt_next="$_cnrt_cap"
+  fi
+  printf "%s" "$_cnrt_next"
+}
+
 _mktemp() {
   if _exists mktemp; then
     if mktemp 2>/dev/null; then
@@ -5946,8 +5973,12 @@ $_authorizations_map"
     Le_NextRenewTime=$(_math "$_endtime" + "$Le_RenewalDays" \* 24 \* 60 \* 60)
     Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
   else
-    Le_NextRenewTime=$(_math "$Le_CertCreateTime" + "$Le_RenewalDays" \* 24 \* 60 \* 60)
-    Le_NextRenewTime=$(_math "$Le_NextRenewTime" - 86400)
+    _endtime_for_cap=""
+    _enddate_value=$(_enddate "$CERT_PATH")
+    if [ "$?" = "0" ] && [ "$_enddate_value" ]; then
+      _endtime_for_cap=$(_ssldate2time "$_enddate_value")
+    fi
+    Le_NextRenewTime=$(_calc_next_renew_time "$Le_CertCreateTime" "$Le_RenewalDays" "$_endtime_for_cap")
     Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
   fi
 
