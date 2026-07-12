@@ -5,7 +5,7 @@ Site: www.knot-dns.cz/docs/2.5/html/man_knsupdate.html
 Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_knot
 Options:
  KNOT_SERVER Server hostname. Default: "localhost".
- KNOT_KEY File path to TSIG key
+ KNOT_KEY TSIG key data, not a file path. knsupdate "key" statement format: "[alg:]name secret". E.g. "hmac-sha256:acme_key BASE64SECRET="
 '
 
 # See also dns_nsupdate.sh
