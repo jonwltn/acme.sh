@@ -7420,9 +7420,9 @@ _precheck() {
   fi
 
   if ! _exists "socat" && ! _exists "python" && ! _exists "python2" && ! _exists "python3"; then
-    _err "It is recommended to install socat or python first."
-    _err "We use socat or python for the standalone server, which is used for standalone mode."
-    _err "If you don't want to use standalone mode, you may ignore this warning."
+    _info "It is recommended to install socat or python first."
+    _info "We use socat or python for the standalone server, which is used for standalone mode."
+    _info "If you don't want to use standalone mode, you may ignore this warning."
   fi
 
   return 0
