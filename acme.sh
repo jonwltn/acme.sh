@@ -4179,6 +4179,12 @@ updateaccount() {
   if [ "$code" = '200' ]; then
     echo "$response" >"$ACCOUNT_JSON_PATH"
     _info "Account update success for $_accUri."
+    # persist the effective mailbox like _regAccount does; otherwise
+    # "--update-account -m new@..." updates the CA but the local conf
+    # keeps showing the old address (issue 4673)
+    if [ "$_email" ]; then
+      _savecaconf "CA_EMAIL" "$_email"
+    fi
 
     ACCOUNT_THUMBPRINT="$(__calc_account_thumbprint)"
     _info "ACCOUNT_THUMBPRINT" "$ACCOUNT_THUMBPRINT"
