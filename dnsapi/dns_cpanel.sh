@@ -38,7 +38,7 @@ dns_cpanel_add() {
   fi
   # adding entry
   _info "Adding the entry"
-  stripped_fulldomain="${fulldomain%.$_domain}"
+  stripped_fulldomain="${fulldomain%."$_domain"}"
   _debug "Adding $stripped_fulldomain to $_domain zone"
   _myget "json-api/cpanel?cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=ZoneEdit&cpanel_jsonapi_func=add_zone_record&domain=$_domain&name=$stripped_fulldomain&type=TXT&txtdata=$txtvalue&ttl=1"
   if _successful_update; then return 0; fi
