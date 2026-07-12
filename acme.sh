@@ -7011,9 +7011,11 @@ installcronjob() {
     #failure must abort: piping an incomplete list back into 'crontab -'
     #would wipe the user's existing cron jobs (issue 3079)
     _cron_list_err="$($_CRONTAB -l 2>&1 >/dev/null)"
-    #multiple -e instead of \| : BRE alternation is a GNU extension that
-    #BSD grep does not support
-    if echo "$_cron_list_err" | grep -i -e "no crontab" -e "no fcrontab" -e "can't open" >/dev/null; then
+    #separate greps: BRE alternation \| is a GNU extension and Solaris
+    #grep takes only a single -e pattern
+    if echo "$_cron_list_err" | grep -i "no crontab" >/dev/null ||
+      echo "$_cron_list_err" | grep -i "no fcrontab" >/dev/null ||
+      echo "$_cron_list_err" | grep -i "can't open" >/dev/null; then
       _cron_entries=""
     else
       _err "Can not list the current cron jobs: $_cron_list_err"
