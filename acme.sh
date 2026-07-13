@@ -4125,7 +4125,7 @@ _regAccount() {
     fi
     _savecaconf "ACCOUNT_URL" "$_accUri"
   else
-    ACCOUNT_URL="$(_readcaconf ACCOUNT_URL)"
+    _accUri="$(_readcaconf ACCOUNT_URL)"
   fi
   export ACCOUNT_URL="$_accUri"
 
