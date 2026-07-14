@@ -1995,6 +1995,26 @@ _calc_next_renew_time() {
   printf "%s" "$_cnrt_next"
 }
 
+#Usage: _calc_validto_renew_time notaftertime renewaldays now
+#Prints the next renew time for a cert issued with a relative --valid-to.
+#A negative renewaldays is anchored to the expiry: notaftertime +
+#renewaldays*86400. Otherwise the cert renews one day before the expiry,
+#or one hour before for certs whose lifetime is 24 hours or less.
+_calc_validto_renew_time() {
+  _cvrt_end="$1"
+  _cvrt_days="$2"
+  _cvrt_now="$3"
+  if [ "$_cvrt_days" ] && [ "$_cvrt_days" -lt 0 ]; then
+    _math "$_cvrt_end" + "$_cvrt_days" \* 24 \* 60 \* 60
+    return 0
+  fi
+  if [ "$(_math "$_cvrt_end" - "$_cvrt_now")" -gt 86400 ]; then
+    _math "$_cvrt_end" - 86400
+  else
+    _math "$_cvrt_end" - 3600
+  fi
+}
+
 _mktemp() {
   if _exists mktemp; then
     if mktemp 2>/dev/null; then
@@ -5950,19 +5970,8 @@ $_authorizations_map"
       _info "It cannot be renewed automatically"
       _info "See: $_VALIDITY_WIKI"
     else
-      _now=$(_time)
-      _debug2 "_now" "$_now"
-      _lifetime=$(_math $Le_NextRenewTime - $_now)
-      _debug2 "_lifetime" "$_lifetime"
-      if [ $_lifetime -gt 86400 ]; then
-        #if lifetime is logner than one day, it will renew one day before
-        Le_NextRenewTime=$(_math $Le_NextRenewTime - 86400)
-        Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
-      else
-        #if lifetime is less than 24 hours, it will renew one hour before
-        Le_NextRenewTime=$(_math $Le_NextRenewTime - 3600)
-        Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
-      fi
+      Le_NextRenewTime=$(_calc_validto_renew_time "$Le_NextRenewTime" "$Le_RenewalDays" "$(_time)")
+      Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
     fi
   elif [ "$Le_RenewalDays" -lt "0" ]; then
     _enddate_value=$(_enddate "$CERT_PATH")
@@ -8050,6 +8059,7 @@ Parameters:
                                       Multiple emails can be given as a comma-separated list: 'a@example.com,b@example.com'
   --accountkey <file>               Specifies the account key path, only valid for the '--install' command.
   --days <ndays>                    Specifies the days to renew the cert when using '--issue' command. The default value is $DEFAULT_RENEW days.
+                                      A negative value renews that many days before the cert expiry.
                                       Negative values could be used to specify a number of days relative to the expiration date of the certificate.
   --httpport <port>                 Specifies the standalone listening port. Only valid if the server is behind a reverse proxy or load balancer.
   --tlsport <port>                  Specifies the standalone tls listening port. Only valid if the server is behind a reverse proxy or load balancer.
@@ -9044,13 +9054,20 @@ _process() {
 
   _debug2 LE_WORKING_DIR "$LE_WORKING_DIR"
 
-  # --days and --valid-to are mutually exclusive by design: --valid-to pins
-  # the cert lifetime and the renewal time follows the expiry, so a
-  # creation-based --days schedule can not apply.
+  # --valid-to pins the cert lifetime, so a creation-anchored (positive)
+  # --days schedule can not apply and is rejected. A negative --days is
+  # anchored to the expiry and composes with a relative --valid-to: the
+  # cert renews that many days before the expiry.
   if [ "$_days" ] && [ "$_valid_to" ]; then
-    _err "--days can not be used together with --valid-to."
-    _err "With --valid-to, the renewal time is derived from the expiry time automatically."
-    return 1
+    if ! _startswith "$_valid_to" "+"; then
+      _err "--days can not be used together with a fixed-date --valid-to: such a cert can not be renewed automatically."
+      return 1
+    fi
+    if ! _startswith "$_days" "-"; then
+      _err "A positive --days can not be used together with --valid-to, the renewal time is derived from the expiry time."
+      _err "Use a negative --days to renew that many days before the expiry, or omit --days to renew 1 day before the expiry."
+      return 1
+    fi
   fi
 
   if [ "$DEBUG" ]; then
