@@ -1995,6 +1995,26 @@ _calc_next_renew_time() {
   printf "%s" "$_cnrt_next"
 }
 
+#Usage: _calc_validto_renew_time notaftertime renewaldays now
+#Prints the next renew time for a cert issued with a relative --valid-to.
+#A negative renewaldays is anchored to the expiry: notaftertime +
+#renewaldays*86400. Otherwise the cert renews one day before the expiry,
+#or one hour before for certs whose lifetime is 24 hours or less.
+_calc_validto_renew_time() {
+  _cvrt_end="$1"
+  _cvrt_days="$2"
+  _cvrt_now="$3"
+  if [ "$_cvrt_days" ] && [ "$_cvrt_days" -lt 0 ]; then
+    _math "$_cvrt_end" + "$_cvrt_days" \* 24 \* 60 \* 60
+    return 0
+  fi
+  if [ "$(_math "$_cvrt_end" - "$_cvrt_now")" -gt 86400 ]; then
+    _math "$_cvrt_end" - 86400
+  else
+    _math "$_cvrt_end" - 3600
+  fi
+}
+
 _mktemp() {
   if _exists mktemp; then
     if mktemp 2>/dev/null; then
@@ -4125,7 +4145,7 @@ _regAccount() {
     fi
     _savecaconf "ACCOUNT_URL" "$_accUri"
   else
-    ACCOUNT_URL="$(_readcaconf ACCOUNT_URL)"
+    _accUri="$(_readcaconf ACCOUNT_URL)"
   fi
   export ACCOUNT_URL="$_accUri"
 
@@ -4179,6 +4199,12 @@ updateaccount() {
   if [ "$code" = '200' ]; then
     echo "$response" >"$ACCOUNT_JSON_PATH"
     _info "Account update success for $_accUri."
+    # persist the effective mailbox like _regAccount does; otherwise
+    # "--update-account -m new@..." updates the CA but the local conf
+    # keeps showing the old address (issue 4673)
+    if [ "$_email" ]; then
+      _savecaconf "CA_EMAIL" "$_email"
+    fi
 
     ACCOUNT_THUMBPRINT="$(__calc_account_thumbprint)"
     _info "ACCOUNT_THUMBPRINT" "$ACCOUNT_THUMBPRINT"
@@ -5298,7 +5324,7 @@ $_authorizations_map"
       fi
 
       # Fix for empty error objects in response which mess up the original code, adapted from fix suggested here: https://github.com/acmesh-official/acme.sh/issues/4933#issuecomment-1870499018
-      entry="$(echo "$response" | sed s/'"error":{}'/'"error":null'/ | _egrep_o '[^\{]*"type":"'$vtype'"[^\}]*')"
+      entry="$(echo "$response" | sed s/'"error":{}'/'"error":null'/ | _egrep_o '[^{]*"type":"'$vtype'"[^}]*')"
       _debug entry "$entry"
 
       if [ -z "$keyauthorization" -a -z "$entry" ]; then
@@ -5630,7 +5656,7 @@ $_authorizations_map"
       status=$(echo "$response" | _egrep_o '"status":"[^"]*' | cut -d : -f 2 | tr -d '"')
       _debug2 status "$status"
       if _contains "$status" "invalid"; then
-        error="$(echo "$response" | _egrep_o '"error":\{[^\}]*')"
+        error="$(echo "$response" | _egrep_o '"error":[{][^}]*')"
         _debug2 error "$error"
         errordetail="$(echo "$error" | _egrep_o '"detail": *"[^"]*' | cut -d '"' -f 4)"
         _debug2 errordetail "$errordetail"
@@ -5812,7 +5838,7 @@ $_authorizations_map"
     return 1
   fi
 
-  echo "$response" >"$CERT_PATH"
+  echo "$response" | _strip_blank_lines >"$CERT_PATH"
   _split_cert_chain "$CERT_PATH" "$CERT_FULLCHAIN_PATH" "$CA_CERT_PATH"
   if [ -z "$_preferred_chain" ]; then
     _preferred_chain=$(_readcaconf DEFAULT_PREFERRED_CHAIN)
@@ -5839,7 +5865,7 @@ $_authorizations_map"
         _relcert="$CERT_PATH.alt"
         _relfullchain="$CERT_FULLCHAIN_PATH.alt"
         _relca="$CA_CERT_PATH.alt"
-        echo "$response" >"$_relcert"
+        echo "$response" | _strip_blank_lines >"$_relcert"
         _split_cert_chain "$_relcert" "$_relfullchain" "$_relca"
         if [ "$DEBUG" ]; then
           _debug "rel chain issuers: " "$(_get_chain_issuers "$_relfullchain")"
@@ -5944,19 +5970,8 @@ $_authorizations_map"
       _info "It cannot be renewed automatically"
       _info "See: $_VALIDITY_WIKI"
     else
-      _now=$(_time)
-      _debug2 "_now" "$_now"
-      _lifetime=$(_math $Le_NextRenewTime - $_now)
-      _debug2 "_lifetime" "$_lifetime"
-      if [ $_lifetime -gt 86400 ]; then
-        #if lifetime is logner than one day, it will renew one day before
-        Le_NextRenewTime=$(_math $Le_NextRenewTime - 86400)
-        Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
-      else
-        #if lifetime is less than 24 hours, it will renew one hour before
-        Le_NextRenewTime=$(_math $Le_NextRenewTime - 3600)
-        Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
-      fi
+      Le_NextRenewTime=$(_calc_validto_renew_time "$Le_NextRenewTime" "$Le_RenewalDays" "$(_time)")
+      Le_NextRenewTimeStr=$(_time2str "$Le_NextRenewTime")
     fi
   elif [ "$Le_RenewalDays" -lt "0" ]; then
     _enddate_value=$(_enddate "$CERT_PATH")
@@ -6057,6 +6072,15 @@ $_authorizations_map"
 }
 
 #in_out_cert   out_fullchain   out_ca
+#Reads a PEM chain from stdin, prints it without the blank lines.
+#Some CAs (Let's Encrypt) separate the certificates of a chain with a blank
+#line, others (ZeroSSL) don't. The blank lines are valid PEM (RFC 7468), but
+#some devices and APIs reject them, so the certs are stored back to back.
+#https://github.com/acmesh-official/acme.sh/issues/1940
+_strip_blank_lines() {
+  sed '/^[[:space:]]*$/d'
+}
+
 _split_cert_chain() {
   _certf="$1"
   _fullchainf="$2"
@@ -6575,7 +6599,7 @@ list_profiles() {
   fi
 
   normalized_response=$(echo "$response" | _normalizeJson)
-  profiles_json=$(echo "$normalized_response" | _egrep_o '"profiles" *: *\{[^\}]*\}')
+  profiles_json=$(echo "$normalized_response" | _egrep_o '"profiles" *: *[{][^}]*[}]')
 
   if [ -z "$profiles_json" ]; then
     _info "The CA '$_l_server_name' does not publish certificate profiles via its directory endpoint."
@@ -6997,15 +7021,39 @@ installcronjob() {
     return 1
   fi
   _info "Installing cron job"
-  if ! $_CRONTAB -l 2>/dev/null | grep "$PROJECT_ENTRY --cron"; then
+  _cron_entry="$random_minute $random_hour,$(_math "$random_hour" + 6),$(_math "$random_hour" + 12),$(_math "$random_hour" + 18) * * * $lesh --cron --home \"$LE_WORKING_DIR\" $_c_entry> /dev/null"
+  _cron_entries="$($_CRONTAB -l 2>/dev/null)"
+  if [ "$?" != "0" ]; then
+    #when the user has no crontab yet, crontab -l also exits non-zero;
+    #only that case may proceed with an empty list. Any other listing
+    #failure must abort: piping an incomplete list back into 'crontab -'
+    #would wipe the user's existing cron jobs (issue 3079)
+    _cron_list_err="$($_CRONTAB -l 2>&1 >/dev/null)"
+    #separate greps: BRE alternation \| is a GNU extension and Solaris
+    #grep takes only a single -e pattern
+    if echo "$_cron_list_err" | grep -i "no crontab" >/dev/null ||
+      echo "$_cron_list_err" | grep -i "no fcrontab" >/dev/null ||
+      echo "$_cron_list_err" | grep -i "can't open" >/dev/null; then
+      _cron_entries=""
+    else
+      _err "Can not list the current cron jobs: $_cron_list_err"
+      _err "Refusing to install the cron job, that could wipe your existing cron jobs."
+      _err "Please add this cron job manually:"
+      _err "$_cron_entry"
+      return 1
+    fi
+  fi
+  if ! echo "$_cron_entries" | grep "$PROJECT_ENTRY --cron"; then
     if _exists uname && uname -a | grep SunOS >/dev/null; then
       _CRONTAB_STDIN="$_CRONTAB --"
     else
       _CRONTAB_STDIN="$_CRONTAB -"
     fi
-    $_CRONTAB -l 2>/dev/null | {
-      cat
-      echo "$random_minute $random_hour,$(_math $random_hour + 6),$(_math $random_hour + 12),$(_math $random_hour + 18) * * * $lesh --cron --home \"$LE_WORKING_DIR\" $_c_entry> /dev/null"
+    {
+      if [ "$_cron_entries" ]; then
+        echo "$_cron_entries"
+      fi
+      echo "$_cron_entry"
     } | $_CRONTAB_STDIN
   fi
   if [ "$?" != "0" ]; then
@@ -7234,7 +7282,7 @@ _deactivate() {
     _debug "Trigger validation."
     vtype="$(_getIdType "$_d_domain")"
     # Fix for empty error objects in response which mess up the original code, adapted from fix suggested here: https://github.com/acmesh-official/acme.sh/issues/4933#issuecomment-1870499018
-    entry="$(echo "$response" | sed s/'"error":{}'/'"error":null'/ | _egrep_o '[^\{]*"type":"'$vtype'"[^\}]*')"
+    entry="$(echo "$response" | sed s/'"error":{}'/'"error":null'/ | _egrep_o '[^{]*"type":"'$vtype'"[^}]*')"
     _debug entry "$entry"
     if [ -z "$entry" ]; then
       _err "$d: Cannot get domain token"
@@ -8020,6 +8068,7 @@ Parameters:
                                       Multiple emails can be given as a comma-separated list: 'a@example.com,b@example.com'
   --accountkey <file>               Specifies the account key path, only valid for the '--install' command.
   --days <ndays>                    Specifies the days to renew the cert when using '--issue' command. The default value is $DEFAULT_RENEW days.
+                                      A negative value renews that many days before the cert expiry.
                                       Negative values could be used to specify a number of days relative to the expiration date of the certificate.
   --httpport <port>                 Specifies the standalone listening port. Only valid if the server is behind a reverse proxy or load balancer.
   --tlsport <port>                  Specifies the standalone tls listening port. Only valid if the server is behind a reverse proxy or load balancer.
@@ -9014,13 +9063,20 @@ _process() {
 
   _debug2 LE_WORKING_DIR "$LE_WORKING_DIR"
 
-  # --days and --valid-to are mutually exclusive by design: --valid-to pins
-  # the cert lifetime and the renewal time follows the expiry, so a
-  # creation-based --days schedule can not apply.
+  # --valid-to pins the cert lifetime, so a creation-anchored (positive)
+  # --days schedule can not apply and is rejected. A negative --days is
+  # anchored to the expiry and composes with a relative --valid-to: the
+  # cert renews that many days before the expiry.
   if [ "$_days" ] && [ "$_valid_to" ]; then
-    _err "--days can not be used together with --valid-to."
-    _err "With --valid-to, the renewal time is derived from the expiry time automatically."
-    return 1
+    if ! _startswith "$_valid_to" "+"; then
+      _err "--days can not be used together with a fixed-date --valid-to: such a cert can not be renewed automatically."
+      return 1
+    fi
+    if ! _startswith "$_days" "-"; then
+      _err "A positive --days can not be used together with --valid-to, the renewal time is derived from the expiry time."
+      _err "Use a negative --days to renew that many days before the expiry, or omit --days to renew 1 day before the expiry."
+      return 1
+    fi
   fi
 
   if [ "$DEBUG" ]; then
